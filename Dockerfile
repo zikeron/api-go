@@ -1,6 +1,8 @@
 FROM golang:1.14-alpine
 
 RUN apk add git
+RUN go get github.com/githubnemo/CompileDaemon
+RUN go get -u go.mongodb.org/mongo-driver
 
 # copy source
 COPY ./src /go/src/api-go
@@ -13,8 +15,5 @@ RUN go mod download
 RUN go mod verify
 
 WORKDIR /go/src/api-go
-
-
-RUN go get github.com/githubnemo/CompileDaemon
 
 ENTRYPOINT CompileDaemon --build="go build /go/src/api-go/main.go" --command=./main

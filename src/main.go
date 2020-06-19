@@ -1,125 +1,181 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/gorilla/mux"
 	"log"
-	"io/ioutil"
 	"net/http"
-	"strconv"
+
+	"github.com/zikeron/api-go/helper"
+	"github.com/zikeron/api-go/models"
+	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type task struct {
-	Id      int    `json:"id"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
 type apiStatus struct {
-	Api string `json:"api"`
+	Api     string `json:"api"`
 	Version string `json:"version"`
 }
 
 var api = apiStatus{
-	Api: "Api Rest in Go",
+	Api:     "Api Rest in Go",
 	Version: "1.0.0",
 }
 
-type allTasks []task
-
-var tasks = allTasks {
-	{
-		Id:      1,
-		Name:    "Tarea uno",
-		Content: "Alguito",
-	},
-}
-
-func getTasks(w http.ResponseWriter, r *http.Request) {
+func getBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tasks)
-}
 
-func getTaskById(w http.ResponseWriter, r *http.Request)  {
-	vars := mux.Vars(r)
-	taskId, err := strconv.Atoi(vars["id"])
+	// we created Book array
+	var books []models.Book
+
+	//Connection mongoDB with helper class
+	collection := helper.ConnectDB()
+
+	// bson.M{},  we passed empty filter. So we want to get all data.
+	cur, err := collection.Find(context.TODO(), bson.M{})
 
 	if err != nil {
-		fmt.Fprintf(w, "Invalid Id")
+		helper.GetError(err, w)
 		return
 	}
 
-	for _, task := range tasks {
-		if task.Id == taskId {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(task)
+	// Close the cursor once finished
+	/*A defer statement defers the execution of a function until the surrounding function returns.
+	simply, run cur.Close() process but after cur.Next() finished.*/
+	defer cur.Close(context.TODO())
+
+	for cur.Next(context.TODO()) {
+
+		// create a value into which the single document can be decoded
+		var book models.Book
+		// & character returns the memory address of the following variable.
+		err := cur.Decode(&book) // decode similar to deserialize process.
+		if err != nil {
+			log.Fatal(err)
 		}
+
+		// add item our array
+		books = append(books, book)
 	}
+
+	if err := cur.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	json.NewEncoder(w).Encode(books) // encode similar to serialize process.
 }
 
-func createTask(w http.ResponseWriter, r *http.Request)  {
-	var newTask task
-	reqBody,err := ioutil.ReadAll(r.Body)
-
-	if err != nil {
-		fmt.Fprintf(w, "Not valid objetc")
-	}
-
-	json.Unmarshal(reqBody, &newTask)
-	newTask.Id = len(tasks) + 1
-	tasks = append(tasks, newTask)
+func getBook(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(newTask)
-}
 
-func deleteTask(w http.ResponseWriter, r *http.Request)  {
-	vars := mux.Vars(r)
-	taskId, err := strconv.Atoi(vars["id"])
+	var book models.Book
+	// we get params with mux.
+	var params = mux.Vars(r)
+
+	// string to primitive.ObjectID
+	id, _ := primitive.ObjectIDFromHex(params["id"])
+
+	collection := helper.ConnectDB()
+
+	// We create filter. If it is unnecessary to sort data for you, you can use bson.M{}
+	filter := bson.M{"_id": id}
+	err := collection.FindOne(context.TODO(), filter).Decode(&book)
 
 	if err != nil {
-		fmt.Fprintf(w, "Invalid Id")
+		helper.GetError(err, w)
 		return
 	}
 
-	for i, task := range tasks {
-		if task.Id == taskId {
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			fmt.Fprintf(w, "The task with ID %v has been remove successfully", taskId)
-		}
-	}
+	json.NewEncoder(w).Encode(book)
 }
 
-func updateTask(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	taskId, err := strconv.Atoi(vars["id"])
-	var updatedTask task
+func createBook(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var book models.Book
+
+	// we decode our body request params
+	_ = json.NewDecoder(r.Body).Decode(&book)
+
+	// connect db
+	collection := helper.ConnectDB()
+
+	// insert our book model.
+	result, err := collection.InsertOne(context.TODO(), book)
 
 	if err != nil {
-		fmt.Fprintf(w, "Invalid ID")
+		helper.GetError(err, w)
+		return
 	}
 
-	reqBody, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		fmt.Fprintf(w, "Please Enter Valid Data")
-	}
-	json.Unmarshal(reqBody, &updatedTask)
-
-	for i, t := range tasks {
-		if t.Id == taskId {
-			tasks = append(tasks[:i], tasks[i+1:]...)
-
-			updatedTask.Id = t.Id
-			tasks = append(tasks, updatedTask)
-
-			fmt.Fprintf(w, "The task with ID %v has been updated successfully", taskId)
-		}
-	}
-
+	json.NewEncoder(w).Encode(result)
 }
 
+func updateBook(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var params = mux.Vars(r)
+
+	//Get id from parameters
+	id, _ := primitive.ObjectIDFromHex(params["id"])
+
+	var book models.Book
+
+	collection := helper.ConnectDB()
+
+	// Create filter
+	filter := bson.M{"_id": id}
+
+	// Read update model from body request
+	_ = json.NewDecoder(r.Body).Decode(&book)
+
+	// prepare update model.
+	update := bson.D{
+		{"$set", bson.D{
+			{"isbn", book.Isbn},
+			{"title", book.Title},
+			{"author", bson.D{
+				{"firstname", book.Author.FirstName},
+				{"lastname", book.Author.LastName},
+			}},
+		}},
+	}
+
+	err := collection.FindOneAndUpdate(context.TODO(), filter, update).Decode(&book)
+
+	if err != nil {
+		helper.GetError(err, w)
+		return
+	}
+
+	book.ID = id
+
+	json.NewEncoder(w).Encode(book)
+}
+
+func deleteBook(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var params = mux.Vars(r)
+
+	// string to primitve.ObjectID
+	id, err := primitive.ObjectIDFromHex(params["id"])
+
+	collection := helper.ConnectDB()
+
+	// prepare filter.
+	filter := bson.M{"_id": id}
+
+	deleteResult, err := collection.DeleteOne(context.TODO(), filter)
+
+	if err != nil {
+		helper.GetError(err, w)
+		return
+	}
+
+	json.NewEncoder(w).Encode(deleteResult)
+}
 
 func index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -129,11 +185,10 @@ func index(w http.ResponseWriter, r *http.Request) {
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", index)
-	router.HandleFunc("/tasks", getTasks).Methods("GET")
-	router.HandleFunc("/tasks/{id}", getTaskById).Methods("GET")
-	router.HandleFunc("/tasks/{id}", deleteTask).Methods("DELETE")
-	router.HandleFunc("/tasks", createTask).Methods("POST")
-	router.HandleFunc("/tasks/{id}", updateTask).Methods("PUT")
-
+	router.HandleFunc("/api/v1/books", getBooks).Methods("GET")
+	router.HandleFunc("/api/v1/books/{id}", getBook).Methods("GET")
+	router.HandleFunc("/api/v1/books", createBook).Methods("POST")
+	router.HandleFunc("/api/v1/books/{id}", updateBook).Methods("PUT")
+	router.HandleFunc("/api/v1/books/{id}", deleteBook).Methods("DELETE")
 	log.Fatal(http.ListenAndServe(":5002", router))
 }

@@ -4,15 +4,14 @@
 
 API for open source web application developed in Go.
 
-The API url is [here](https://kaizen-medical.herokuapp.com/).
-
 ## Getting Started
+
+Before start, you need to create a folder called «database» in the root of this project to persist Mongo data from Docker 
 
 ### Dependencies
 
 * gorilla/mux
-
-## Credits
+* mongo-driver
 
 ### Authors
 
