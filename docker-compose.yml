@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+
+  api_go:
+    container_name: api_go
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+    - "5002:5002"
+    environment:
+      - GO111MODULE=on
+      - CGO_ENABLED=0
+      - GOOS=linux
+      - GOARCH=amd64
+    volumes:
+     - ./src:/go/src/api-go
+
