@@ -2,6 +2,18 @@ version: "3.8"
 
 services:
 
+  api_mongo:
+    container_name: api_mongo
+    image: mongo
+    restart: always
+    environment:
+      MONGO_ROOT_USERNAME: mongoadmin
+      MONGO_ROOT_PASSWORD: secret
+    ports:
+    - "27017:27017"
+    volumes:
+    - ./database:/data/db
+
   api_go:
     container_name: api_go
     build:
@@ -16,4 +28,7 @@ services:
       - GOARCH=amd64
     volumes:
      - ./src:/go/src/api-go
-
+    depends_on:
+      - api_mongo
+    links:
+      - api_mongo
