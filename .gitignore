@@ -540,4 +540,4 @@ MigrationBackup/
 .ionide/
 
 # database volume
-./database
+database/
