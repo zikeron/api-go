@@ -1,4 +1,4 @@
-FROM golang:1.14-alpine
+FROM golang:1.20.10-alpine
 
 RUN apk add git
 RUN go get github.com/githubnemo/CompileDaemon
